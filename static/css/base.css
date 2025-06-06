@@ -25,31 +25,50 @@ body {
     font-size: 1.3rem;
 }
 
-/* Navigation Icons */
+/* --- CORRECTED NAVBAR STYLES --- */
+
+/* General rule for nav icons container */
 .nav-icons {
     margin-left: auto;
     margin-right: 0;
-    display: flex;
-    align-items: center;
 }
 
-.nav-item {
-    display: flex;
-    align-items: center;
-}
-
-.nav-link {
-    padding: 0.5rem 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
+/* Hide the dividers on small (collapsed) screens by default */
 .nav-divider {
-    height: 20px;
-    width: 1px;
-    background-color: rgba(255, 255, 255, 0.5);
-    margin: 0 2px;
+    display: none;
+}
+
+/* Adjust nav link padding for a better mobile (vertical) view */
+.nav-link {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Media query for large screens (992px and wider, where the navbar is expanded) */
+@media (min-width: 992px) {
+
+    /* Display the nav items in a row */
+    .nav-icons {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    /* Restore the visual dividers */
+    .nav-divider {
+        display: block;
+        height: 20px;
+        width: 1px;
+        background-color: rgba(255, 255, 255, 0.5);
+        margin: 0 2px;
+    }
+
+    /* Restore original padding for horizontal view */
+    .nav-link {
+        padding: 0.5rem 0.75rem;
+        justify-content: center;
+    }
 }
 
 /* Logout icon - extra space */
