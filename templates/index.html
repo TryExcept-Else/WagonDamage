@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Wagon Damage Detection System{% endblock %}
+
+{% block page_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row text-center mb-4">
+    <div class="col">
+        <h1 class="display-4 fw-bold text-primary">Welcome to Wagon Damage Detection System</h1>
+        <p class="lead">Select an option below to continue</p>
+    </div>
+</div>
+
+<div class="row g-4 py-3">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm hover-card">
+            <div class="card-body text-center d-flex flex-column">
+                <div class="feature-icon bg-primary bg-gradient text-white mb-3">
+                    <i class="fas fa-upload fa-3x"></i>
+                </div>
+                <h3 class="card-title">Process Videos</h3>
+                <p class="card-text flex-grow-1">Select new wagon inspection videos to the system for processing and damage detection.</p>
+                <a href="{{ url_for('upload') }}" class="btn btn-primary mt-auto">
+                    <i class="fas fa-arrow-right me-2"></i>Process Video
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm hover-card">
+            <div class="card-body text-center d-flex flex-column">
+                <div class="feature-icon bg-success bg-gradient text-white mb-3">
+                    <i class="fas fa-search fa-3x"></i>
+                </div>
+                <h3 class="card-title">Damage Detection</h3>
+                <p class="card-text flex-grow-1">Process videos to detect wagon damages and generate detailed inspection reports.</p>
+                <a href="{{ url_for('damage_detection') }}" class="btn btn-success mt-auto">
+                    <i class="fas fa-arrow-right me-2"></i>Detect Damage
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm hover-card">
+            <div class="card-body text-center d-flex flex-column">
+                <div class="feature-icon bg-info bg-gradient text-white mb-3">
+                    <i class="fas fa-chart-line fa-3x"></i>
+                </div>
+                <h3 class="card-title">Dashboard</h3>
+                <p class="card-text flex-grow-1">View and analyze the detected wagon damages with detailed statistics and reports.</p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-info mt-auto">
+                    <i class="fas fa-arrow-right me-2"></i>View Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-lg-8 mx-auto">
+        <div class="card bg-light">
+            <div class="card-body">
+                <h4 class="card-title text-center mb-4">System Overview</h4>
+                <div class="row text-center g-4">
+                    <div class="col-sm-4">
+                        <div class="stat-item">
+                            <div class="stat-value text-primary">25</div>
+                            <div class="stat-label">Videos Processed</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="stat-item">
+                            <div class="stat-value text-danger">12</div>
+                            <div class="stat-label">Damages Detected</div>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="stat-item">
+                            <div class="stat-value text-success">8</div>
+                            <div class="stat-label">Reports Generated</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+{% endblock %} 

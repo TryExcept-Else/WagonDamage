@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+
+{% block title %}Damage Detection - Wagon Damage Detection System{% endblock %}
+
+{% block page_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/damage_detection.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2 class="page-title">
+            <i class="fas fa-search me-2 text-success"></i>Wagon Damage Detection
+        </h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active">Damage Detection</li>
+            </ol>
+        </nav>
+        <hr>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Select Date and Video</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('damage_detection') }}" id="detectionForm">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label for="dateInput" class="form-label">Select Date</label>
+                            <input type="date" class="form-control" id="dateInput" name="date" value="{{ selected_date }}" required>
+                            <div class="form-text">Select a date to view available videos</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="videoSelect" class="form-label">Select Video</label>
+                            <select class="form-select" id="videoSelect" name="video" {% if not videos %}disabled{% endif %} required>
+                                <option value="" selected disabled>{% if videos %}Choose a video...{% else %}No videos available{% endif %}</option>
+                                {% for video in videos %}
+                                <option value="{{ video }}">{{ video }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Select a video to process for damage detection</div>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 col-md-6 mx-auto mt-4">
+                        <button type="submit" class="btn btn-success btn-lg" id="processBtn" {% if not videos %}disabled{% endif %}>
+                            <i class="fas fa-cog me-2"></i>Process Video
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mb-4" id="videoPreviewCard" style="display: none;">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-play-circle me-2"></i>Video Preview</h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="ratio ratio-16x9 mx-auto" style="max-width: 800px;">
+                    <video id="videoPlayer" controls class="rounded">
+                        <source src="" type="video/mp4" id="videoSource">
+                        Your browser does not support HTML5 video.
+                    </video>
+                </div>
+                <div class="mt-3">
+                    <p class="text-muted" id="videoDetails">Loading video details...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm" id="processingCard" style="display: none;">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>Processing Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="processing-status">
+                    <h4 class="text-center mb-4">Processing Video for Damage Detection</h4>
+                    
+                    <div class="progress-container">
+                        <div class="progress mb-4" style="height: 25px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                 role="progressbar" id="detectionProgressBar" style="width: 0%;" 
+                                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="status-list">
+                        <div class="status-item d-flex align-items-center mb-3" id="statusInitializing">
+                            <div class="status-icon me-3">
+                                <span class="status-badge bg-primary"><i class="fas fa-spinner fa-spin"></i></span>
+                            </div>
+                            <div class="status-text flex-grow-1">
+                                <h6 class="mb-0">Initializing detection algorithm</h6>
+                                <small class="text-muted">Setting up environment and loading models</small>
+                            </div>
+                            <div class="status-state">
+                                <span class="badge bg-primary">In Progress</span>
+                            </div>
+                        </div>
+                        
+                        <div class="status-item d-flex align-items-center mb-3" id="statusFrameExtraction">
+                            <div class="status-icon me-3">
+                                <span class="status-badge bg-secondary"><i class="fas fa-clock"></i></span>
+                            </div>
+                            <div class="status-text flex-grow-1">
+                                <h6 class="mb-0">Frame extraction</h6>
+                                <small class="text-muted">Extracting frames from video for analysis</small>
+                            </div>
+                            <div class="status-state">
+                                <span class="badge bg-secondary">Waiting</span>
+                            </div>
+                        </div>
+                        
+                        <div class="status-item d-flex align-items-center mb-3" id="statusObjectDetection">
+                            <div class="status-icon me-3">
+                                <span class="status-badge bg-secondary"><i class="fas fa-clock"></i></span>
+                            </div>
+                            <div class="status-text flex-grow-1">
+                                <h6 class="mb-0">Object detection</h6>
+                                <small class="text-muted">Identifying wagon components in each frame</small>
+                            </div>
+                            <div class="status-state">
+                                <span class="badge bg-secondary">Waiting</span>
+                            </div>
+                        </div>
+                        
+                        <div class="status-item d-flex align-items-center mb-3" id="statusDamageAnalysis">
+                            <div class="status-icon me-3">
+                                <span class="status-badge bg-secondary"><i class="fas fa-clock"></i></span>
+                            </div>
+                            <div class="status-text flex-grow-1">
+                                <h6 class="mb-0">Damage analysis</h6>
+                                <small class="text-muted">Analyzing detected components for damages</small>
+                            </div>
+                            <div class="status-state">
+                                <span class="badge bg-secondary">Waiting</span>
+                            </div>
+                        </div>
+                        
+                        <div class="status-item d-flex align-items-center" id="statusReportGeneration">
+                            <div class="status-icon me-3">
+                                <span class="status-badge bg-secondary"><i class="fas fa-clock"></i></span>
+                            </div>
+                            <div class="status-text flex-grow-1">
+                                <h6 class="mb-0">Report generation</h6>
+                                <small class="text-muted">Generating detailed report of detected damages</small>
+                            </div>
+                            <div class="status-state">
+                                <span class="badge bg-secondary">Waiting</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <button type="button" class="btn btn-outline-danger" id="cancelProcessingBtn">
+                            <i class="fas fa-ban me-2"></i>Cancel Processing
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm" id="resultsCard" style="display: none;">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Detection Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>Processing complete! Damage detection analysis has been successfully completed.
+                </div>
+                
+                <div class="results-summary mb-4">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="result-value text-primary">0</div>
+                                <div class="result-label">Frames Analyzed</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="result-value text-success">0</div>
+                                <div class="result-label">Components Detected</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="result-value text-danger">0</div>
+                                <div class="result-label">Damages Found</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="result-value text-warning">0%</div>
+                                <div class="result-label">Confidence Score</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h5 class="mb-3">Damage Details</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Component</th>
+                                <th>Damage Type</th>
+                                <th>Severity</th>
+                                <th>Location</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="no-data-row">
+                                <td colspan="5" class="text-center py-4">No damage details available yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <div class="d-flex justify-content-center gap-3">
+                        <button class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i>Download Full Report
+                        </button>
+                        <button class="btn btn-success">
+                            <i class="fas fa-chart-bar me-2"></i>View Analytics
+                        </button>
+                        <button class="btn btn-secondary" id="newDetectionBtn">
+                            <i class="fas fa-redo me-2"></i>New Detection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/damage_detection.js') }}"></script>
+{% endblock %} 

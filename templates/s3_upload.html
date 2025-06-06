@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}S3 Video Upload - Wagon Damage Detection System{% endblock %}
+
+{% block page_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/s3_upload.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/s3_dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2 class="page-title">
+            <i class="fas fa-cloud-upload-alt me-2 text-primary"></i>S3 Video Upload
+        </h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('s3_dashboard') }}">Home</a></li>
+                <li class="breadcrumb-item active">Upload</li>
+            </ol>
+        </nav>
+        <h5 class="text-muted">Upload video files directly to AWS S3</h5>
+        <hr>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Video to S3 Bucket</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('s3_upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="mb-4">
+                        <div class="upload-zone" id="dropZone">
+                            <div class="upload-zone-content text-center">
+                                <i class="fas fa-cloud-upload-alt mb-3 upload-icon"></i>
+                                <h5>Drag & Drop Video Files Here</h5>
+                                <p class="text-muted">or</p>
+                                <label for="videoFile" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-video me-2"></i>Select Video
+                                </label>
+                                <input type="file" name="video" id="videoFile" class="d-none" accept=".mp4,.avi,.mov,.wmv,.flv,.mkv,.webm,.3gp,.m4v">
+                                <p class="mt-3 text-muted small">Supported formats: MP4, AVI, MOV, WMV, FLV, MKV, WEBM, 3GP, M4V</p>
+                            </div>
+                        </div>
+                        <div id="filePreview" class="mt-3 d-none">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-file-video file-icon me-3 text-primary"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1" id="fileName">filename.mp4</h6>
+                                            <div class="small text-muted" id="fileSize">10.5 MB</div>
+                                        </div>
+                                        <button type="button" class="btn-close" id="removeFile"></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="" id="termsCheck" required>
+                        <label class="form-check-label" for="termsCheck">
+                            I confirm that this video is related to wagon damage detection and contains no sensitive/personal information
+                        </label>
+                    </div>
+                    
+                    <div class="upload-progress d-none" id="uploadProgress">
+                        <label class="form-label">Upload Progress</label>
+                        <div class="progress mb-2">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="progressBar"></div>
+                        </div>
+                        <div class="small text-muted text-center" id="progressText">0%</div>
+                    </div>
+                    
+                    <div class="text-end mt-4">
+                        <a href="{{ url_for('s3_dashboard') }}" class="btn btn-outline-secondary me-2">
+                            <i class="fas fa-arrow-left me-1"></i>Back to S3 Uploader
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" disabled>
+                            <i class="fas fa-cloud-upload-alt me-1"></i>Upload to S3
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Upload Guidelines</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Videos should be in a supported format (MP4, AVI, MOV, WMV, FLV, MKV, WEBM, 3GP, M4V)
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Ensure the video clearly shows the wagon exterior for optimal damage detection
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Videos should be properly lit and focused
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Maximum file size is 1 TB, but practical upload limit depends on your internet connection
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        Files will be uploaded to S3 bucket in the "sample_data" folder
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/s3_upload.js') }}"></script>
+{% endblock %} 

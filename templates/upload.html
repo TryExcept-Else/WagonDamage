@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Video Processing - Wagon Damage Detection System{% endblock %}
+
+{% block page_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/upload.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2 class="page-title">
+            <i class="fas fa-download me-2 text-primary"></i>Retrieve & Process Videos
+        </h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active">Video Processing</li>
+            </ol>
+        </nav>
+        <hr>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <div class="video-retrieval-container">
+                    <form id="retrieveForm" action="{{ url_for('retrieve_videos') }}" method="POST">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <!-- Date Selector -->
+                                <div class="mb-3">
+                                    <label for="retrieveDate" class="form-label">Select Entry Video Date:</label>
+                                    <input type="date" class="form-control" id="retrieveDate" name="retrieve_date" required>
+                                    <small class="text-muted">Format: DD-MM-YYYY</small>
+                                </div>
+
+                                <!-- Camera Angle Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Camera Angle:</label>
+                                    <div class="d-flex">
+                                        <div class="form-check me-3">
+                                            <input class="form-check-input" type="radio" name="camera_angle" id="cameraLeft" value="left" checked>
+                                            <label class="form-check-label" for="cameraLeft">Left</label>
+                                        </div>
+                                        <div class="form-check me-3">
+                                            <input class="form-check-input" type="radio" name="camera_angle" id="cameraRight" value="right">
+                                            <label class="form-check-label" for="cameraRight">Right</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="camera_angle" id="cameraTop" value="top">
+                                            <label class="form-check-label" for="cameraTop">Top</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Video Type Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Video Type:</label>
+                                    <div class="d-flex">
+                                        <div class="form-check me-3">
+                                            <input class="form-check-input" type="radio" name="video_type" id="videoEntry" value="entry" checked>
+                                            <label class="form-check-label" for="videoEntry">Entry</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="video_type" id="videoExit" value="exit">
+                                            <label class="form-check-label" for="videoExit">Exit</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Retrieve Button -->
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-primary" id="retrieveBtn">
+                                        <i class="fas fa-search me-2"></i>Retrieve Videos
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <!-- Loading Spinner -->
+                                <div id="loadingSpinner" style="display: none;" class="text-center my-5">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Searching for videos...</p>
+                                </div>
+                                
+                                <!-- No Results Message -->
+                                <div id="noResultsMessage" style="display: none;" class="alert alert-info my-3">
+                                    No videos found matching the criteria.
+                                </div>
+                                
+                                <!-- Folder Selection Dropdown -->
+                                <div id="folderSelectContainer" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="folderSelect" class="form-label">Select Video Folder:</label>
+                                        <select class="form-select" id="folderSelect" name="folder_id">
+                                            <option value="" selected>Select a folder...</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Videos List Container -->
+                                <div id="videoListContainer" style="display: none;" class="mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-folder-open me-2"></i>Available Videos</h6>
+                                            <div id="videoList" class="mt-3">
+                                                <!-- Videos will be listed here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Process Button -->
+                                    <div class="d-grid gap-2 mt-3">
+                                        <button type="button" class="btn btn-success" id="processBtn" style="display: none;">
+                                            <i class="fas fa-play-circle me-2"></i>Start Processing
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                                        <!-- Processing Status Section (initially hidden) -->                    <div class="processing-status" id="processingStatus" style="display: none;">                        <h4 class="mb-3 text-center">Processing Videos</h4>                        <div class="alert alert-info text-center">                            <i class="fas fa-info-circle me-2"></i>                            Videos from S3 are being processed. You will be notified when complete.                        </div>                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/retrieve_videos.js') }}"></script>
+{% endblock %} 
