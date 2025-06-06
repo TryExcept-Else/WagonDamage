@@ -7,6 +7,8 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 from dotenv import load_dotenv
 import logging
+from frame_extractor import extract_and_annotate_wagons
+import time
 # Import the S3 utility functions
 from s3_utils import upload_file_to_s3, download_file_from_s3, delete_file_from_s3, check_file_exists, generate_presigned_url, get_s3_client
 
@@ -21,6 +23,16 @@ logger.info("Environment variables loaded from .env file")
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 app.permanent_session_lifetime = timedelta(minutes=30)
+
+# Add these lines after app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['FRAME_EXTRACTION_OUTPUT'] = 'static/extracted_frames'
+app.config['YOLO_MODEL_PATH'] = 'models/best_weights.pt' # IMPORTANT: Create a 'models' folder and place your best.pt file there
+
+# Create folders if they don't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs(app.config['FRAME_EXTRACTION_OUTPUT'], exist_ok=True)
+os.makedirs('models', exist_ok=True)
 
 # S3 Configuration from environment variables
 S3_BUCKET = os.getenv('S3_BUCKET_NAME', 'aispry-project')
@@ -717,6 +729,56 @@ def process_videos():
     except Exception as e:
         logger.error(f"Error processing videos: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
+
+@app.route('/frame_extraction', methods=['GET', 'POST'])
+@login_required
+@admin_standard_required
+def frame_extraction():
+    if request.method == 'POST':
+        if 'video' not in request.files:
+            flash('No file part', 'error')
+            return redirect(request.url)
+
+        file = request.files['video']
+        if file.filename == '':
+            flash('No selected file', 'error')
+            return redirect(request.url)
+
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(video_path)
+
+            logger.info(f"Video saved to {video_path}")
+
+            # Create a unique output directory for this extraction task
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            output_frames_dir = os.path.join(app.config['FRAME_EXTRACTION_OUTPUT'], timestamp)
+            output_video_path = os.path.join(output_frames_dir, 'annotated_video.mp4')
+
+            flash(f'Starting frame extraction for {filename}. This may take a while...', 'info')
+
+            # Run the extraction process
+            saved_count, frame_paths = extract_and_annotate_wagons(
+                video_path=video_path,
+                output_dir_frames=output_frames_dir,
+                output_video_path=output_video_path,
+                model_path=app.config['YOLO_MODEL_PATH']
+            )
+
+            if saved_count > 0:
+                flash(f'Successfully extracted {saved_count} frames.', 'success')
+                return render_template('frame_extraction.html', frames=frame_paths)
+            else:
+                flash('No wagons were detected or an error occurred during processing.', 'warning')
+                return redirect(url_for('frame_extraction'))
+
+        else:
+            flash('Invalid file type. Please upload a valid video file.', 'error')
+            return redirect(request.url)
+
+    return render_template('frame_extraction.html', frames=None)
+
 
 if __name__ == '__main__':
     app.run(debug=True) 
