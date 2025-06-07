@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import logging
 from frame_extractor import extract_and_annotate_wagons
 import time
+import base64
+import cv2
 # Import the S3 utility functions
 from s3_utils import upload_file_to_s3, download_file_from_s3, delete_file_from_s3, check_file_exists, generate_presigned_url, get_s3_client
 
@@ -27,7 +29,7 @@ app.permanent_session_lifetime = timedelta(minutes=30)
 # Add these lines after app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['FRAME_EXTRACTION_OUTPUT'] = 'static/extracted_frames'
-app.config['YOLO_MODEL_PATH'] = 'models/best_weights.pt' # IMPORTANT: Create a 'models' folder and place your best.pt file there
+app.config['YOLO_MODEL_PATH'] = 'models/best_weights.pt'  # IMPORTANT: Create a 'models' folder and place your best.pt file there
 
 # Create folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -58,13 +60,13 @@ else:
     logger.info(f"Target S3 folder: {S3_UPLOAD_FOLDER} in bucket: {S3_BUCKET}")
 # Check upload folder configuration
 if not S3_UPLOAD_FOLDER:
-    logger.warning(f"The S3 upload folder path is empty. Please check configuration.")
+    logger.warning("The S3 upload folder path is empty. Please check configuration.")
 
 # User authentication data
 USERS = {
     "admin": "123",  # Production should use hashed passwords stored in database
     "user": "123",
-    "admin1": "Uploader@123"  
+    "admin1": "Uploader@123"
 }
 
 # User role assignments
@@ -79,12 +81,12 @@ def get_videos_by_date_from_s3(date_str):
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         formatted_date = date_obj.strftime('%d-%m-%Y')
         prefix = f"{S3_UPLOAD_FOLDER}/{formatted_date}/"
-        
+
         response = s3_client.list_objects_v2(
             Bucket=S3_BUCKET,
             Prefix=prefix
         )
-        
+
         if 'Contents' in response:
             # Extract video filenames from keys
             videos = []
@@ -122,7 +124,7 @@ def get_system_status():
                         total_videos_count += 1
         except Exception as e:
             logger.error(f"Error counting videos: {str(e)}")
-            
+
         # Calculate storage usage
         storage_bytes = 0
         try:
@@ -135,7 +137,7 @@ def get_system_status():
                     storage_bytes += item.get('Size', 0)
         except Exception as e:
             logger.error(f"Error calculating storage: {str(e)}")
-            
+
         # Convert bytes to human-readable format
         if storage_bytes < 1024:
             storage_usage = f"{storage_bytes} B"
@@ -145,7 +147,7 @@ def get_system_status():
             storage_usage = f"{storage_bytes/(1024*1024):.1f} MB"
         else:
             storage_usage = f"{storage_bytes/(1024*1024*1024):.1f} GB"
-            
+
         return {
             "last_upload_time": None,
             "processing_speed": "Optimal",
@@ -221,26 +223,26 @@ def admin_standard_required(f):
 def index():
     if 'username' not in session:
         return redirect(url_for('login'))
-    
+
     # Redirect based on role
     if session.get('role') == 's3_uploader':
         return redirect(url_for('s3_dashboard'))
-    
-    return render_template('index.html', 
-                         username=session.get('username'),
-                         system_status=SYSTEM_STATUS)
+
+    return render_template('index.html',
+                           username=session.get('username'),
+                           system_status=SYSTEM_STATUS)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+
         if username in USERS and USERS[username] == password:
             session['logged_in'] = True
             session['username'] = username
             session['role'] = ADMIN_ROLES.get(username, 'user')
-            
+
             # Redirect based on role
             if session.get('role') == 's3_uploader':
                 return redirect(url_for('s3_dashboard'))
@@ -248,7 +250,7 @@ def login():
                 return redirect(url_for('index'))
         else:
             flash('Invalid username or password', 'error')
-    
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -264,22 +266,22 @@ def upload():
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
-        
+
         file = request.files['file']
-        
+
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
-        
+
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            
+
             # Get parameters for file organization
             upload_date = request.form.get('upload_date')
             client_id = request.form.get('client_id', 'default_client')
             camera_angle = request.form.get('camera_angle', 'left')
             video_type = request.form.get('video_type', 'entry')
-            
+
             try:
                 # Format date
                 if upload_date:
@@ -287,10 +289,10 @@ def upload():
                     formatted_date = date_obj.strftime('%d-%m-%Y')
                 else:
                     formatted_date = datetime.now().strftime('%d-%m-%Y')
-                
+
                 # Create S3 path
                 s3_folder_path = f"{S3_UPLOAD_FOLDER}/{formatted_date}/{client_id}/raw-videos/{camera_angle}"
-                
+
                 # Upload to S3
                 success, message, uploaded_s3_key = upload_file_to_s3(
                     file,
@@ -299,29 +301,29 @@ def upload():
                     VIDEO_MIME_TYPES,
                     filename=filename
                 )
-                
+
                 if success:
                     flash(f'File successfully uploaded to S3: {uploaded_s3_key}')
-                    
+
                     # Update system status
                     SYSTEM_STATUS['last_upload_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     SYSTEM_STATUS['total_videos'] += 1
                 else:
                     flash(f'Error uploading to S3: {message}', 'error')
-                
+
             except Exception as e:
                 logger.error(f"Error uploading file: {str(e)}")
                 flash(f'Error: {str(e)}', 'error')
-            
+
             return redirect(url_for('upload'))
         else:
             allowed_formats = ', '.join(sorted(ALLOWED_EXTENSIONS))
             flash(f'Only video files are allowed ({allowed_formats})')
             return redirect(request.url)
-    
-    return render_template('upload.html', 
-                          username=session.get('username'),
-                          system_status=SYSTEM_STATUS)
+
+    return render_template('upload.html',
+                           username=session.get('username'),
+                           system_status=SYSTEM_STATUS)
 
 @app.route('/damage_detection', methods=['GET', 'POST'])
 @login_required
@@ -331,27 +333,27 @@ def damage_detection():
         # Handle form submission
         date = request.form.get('date')
         video = request.form.get('video')
-        
+
         if date and video:
             # Get the actual video data from S3
             logger.info(f"Starting processing for video: {video} from date: {date}")
             flash('Video processing started')
         else:
             flash('Missing date or video selection', 'error')
-        
+
         # Redirect back to results
         return redirect(url_for('damage_detection', date=date))
-    
+
     # Get date parameter from URL or use today's date
     selected_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    
+
     # Get videos for the selected date
     videos = get_videos_by_date_from_s3(selected_date)
-    
+
     return render_template('damage_detection.html',
-                         username=session.get('username'),
-                         videos=videos,
-                         selected_date=selected_date)
+                           username=session.get('username'),
+                           videos=videos,
+                           selected_date=selected_date)
 
 @app.route('/dashboard')
 @login_required
@@ -359,21 +361,21 @@ def damage_detection():
 def dashboard():
     # Get actual damage reports from our function (currently empty)
     reports = get_damage_reports()
-    
+
     # Refresh system status to ensure latest data
     current_status = get_system_status()
-    
+
     # If last_upload_time was set during previous operations, preserve it
     if SYSTEM_STATUS.get("last_upload_time") is not None:
         current_status["last_upload_time"] = SYSTEM_STATUS["last_upload_time"]
-    
+
     # Update global system status with the refreshed data
     for key in current_status:
         SYSTEM_STATUS[key] = current_status[key]
-    
+
     # Get statistics for charts
     chart_data = {}
-    
+
     # For now we'll create empty chart data objects
     chart_data["damage_by_date"] = []
     chart_data["damage_types"] = {
@@ -388,12 +390,12 @@ def dashboard():
         "locations": [],
         "counts": []
     }
-    
-    return render_template('dashboard.html', 
-                          reports=reports,
-                          username=session.get('username'),
-                          system_status=SYSTEM_STATUS,
-                          chart_data=chart_data)
+
+    return render_template('dashboard.html',
+                           reports=reports,
+                           username=session.get('username'),
+                           system_status=SYSTEM_STATUS,
+                           chart_data=chart_data)
 
 @app.route('/api/videos/<date>')
 @login_required
@@ -431,22 +433,22 @@ def s3_dashboard():
     if s3_client is None:
         flash('S3 connection is not available. Please check AWS credentials.', 'error')
         return render_template('s3_dashboard.html', username=session.get('username'))
-    
+
     # Handle form submission (POST request)
     if request.method == 'POST':
         # Check if a file was uploaded
         if 'video' not in request.files:
             flash('No file part', 'error')
             return redirect(url_for('s3_dashboard'))
-        
+
         file = request.files['video']
-        
+
         # If user does not select file, browser also
         # submits an empty part without filename
         if file.filename == '':
             flash('No selected file', 'error')
             return redirect(url_for('s3_dashboard'))
-        
+
         if file and allowed_file(file.filename):
             try:
                 # Get form parameters
@@ -454,8 +456,8 @@ def s3_dashboard():
                 client_id = request.form.get('client_id', 'client_123')  # Default to client_123 for admin1
                 camera_angle = request.form.get('camera_angle', 'left')  # Default to left if not specified
                 video_type = request.form.get('video_type', 'entry')     # Default to entry if not specified
-                
-                # Convert upload_date from yyyy-mm-dd to dd-mm-yyyy for folder name
+
+                # Convert upload_date from YYYY-MM-DD to DD-MM-YYYY for folder name
                 if upload_date:
                     try:
                         date_obj = datetime.strptime(upload_date, '%Y-%m-%d')
@@ -465,26 +467,27 @@ def s3_dashboard():
                         formatted_date = datetime.now().strftime('%d-%m-%Y')
                 else:
                     # If no date provided, use current date
-                    formatted_date = datetime.now().strftime('%d-%m-%Y')
-                
+                    date_obj = datetime.now()
+                    formatted_date = date_obj.strftime('%d-%m-%Y')
+
                 # Format the date for filename (ddmmyyyy)
                 filename_date = date_obj.strftime('%d%m%Y')
-                
+
                 # Secure the filename
                 original_filename = secure_filename(file.filename)
-                
+
                 # Create new filename format: {date}_{camera_angle}_{entry/exit}.{extension}
                 extension = os.path.splitext(original_filename)[1].lower()
                 new_filename = f"{filename_date}_{camera_angle}_{video_type}{extension}"
-                
+
                 # Create the structured S3 path:
                 # {S3_UPLOAD_FOLDER}/{date}/{client_id}/raw-videos/{camera_angle}/{filename}
                 base_folder = S3_UPLOAD_FOLDER  # Path from environment variable
                 s3_folder_path = f"{base_folder}/{formatted_date}/{client_id}/raw-videos/{camera_angle}"
                 s3_key = f"{s3_folder_path}/{new_filename}"
-                
+
                 logger.info(f"Uploading file to structured path: {s3_key}")
-                
+
                 # Upload the file using the utility function
                 success, message, uploaded_s3_key = upload_file_to_s3(
                     file,
@@ -493,31 +496,31 @@ def s3_dashboard():
                     VIDEO_MIME_TYPES,
                     filename=new_filename  # Pass the new filename to the upload function
                 )
-                
+
                 if success:
                     # Update system status
                     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     SYSTEM_STATUS['last_upload_time'] = current_time
                     SYSTEM_STATUS['total_videos'] += 1
                     SYSTEM_STATUS['system_status'] = "Online"
-                    
+
                     logger.info(f"Successfully uploaded file to S3: {message}")
                     flash(f'Video successfully uploaded to S3 path: {uploaded_s3_key}', 'success')
                 else:
                     logger.error(f"Error uploading to S3: {message}")
                     flash(f'Error: {message}', 'error')
                     SYSTEM_STATUS['system_status'] = "Error"
-                
+
             except Exception as e:
                 logger.error(f"General error during upload: {str(e)}")
                 flash(f'Error uploading to S3: {str(e)}', 'error')
-            
+
             return redirect(url_for('s3_dashboard'))
         else:
             allowed_formats = ', '.join(sorted(ALLOWED_EXTENSIONS))
             flash(f'Only video files are allowed ({allowed_formats})', 'error')
             return redirect(url_for('s3_dashboard'))
-    
+
     # Render the dashboard template for GET requests
     return render_template('s3_dashboard.html', username=session.get('username'))
 
@@ -531,14 +534,14 @@ def test_s3_connection():
             "bucket": S3_BUCKET,
             "region": S3_REGION
         }), 500
-    
+
     # Create a test key in the allowed folder
     test_key = f"{S3_UPLOAD_FOLDER}/connection_test.txt"
-    
+
     try:
         # Test if we can check file existence (uses get_object with try/except)
         file_exists = check_file_exists(S3_BUCKET, test_key)
-        
+
         return jsonify({
             "status": "success",
             "message": f"Successfully connected to S3 bucket: {S3_BUCKET} and folder: {S3_UPLOAD_FOLDER}",
@@ -565,44 +568,44 @@ def retrieve_videos():
         date = request.form.get('retrieve_date')
         camera_angle = request.form.get('camera_angle')
         video_type = request.form.get('video_type')
-        
+
         try:
             # Format date from YYYY-MM-DD to DD-MM-YYYY format used in S3
             date_obj = datetime.strptime(date, '%Y-%m-%d')
             formatted_date = date_obj.strftime('%d-%m-%Y')
-            
+
             # Create the S3 prefix path based on the parameters
             # Structure: {S3_UPLOAD_FOLDER}/{date}/{client_id}/raw-videos/{camera_angle}/{video_name}
             base_folder = S3_UPLOAD_FOLDER  # Path from environment variable
             prefix = f"{base_folder}/{formatted_date}/"
-            
+
             logger.info(f"Searching S3 with prefix: {prefix}")
-            
+
             # List client_id folders within the given date path
             response = s3_client.list_objects_v2(
                 Bucket=S3_BUCKET,
                 Prefix=prefix,
                 Delimiter='/'
             )
-            
+
             folders = []
-            
+
             # Process common prefixes (client_id folders)
             if 'CommonPrefixes' in response:
                 for i, p in enumerate(response.get('CommonPrefixes', [])):
                     client_prefix = p.get('Prefix')
                     client_id = client_prefix.split('/')[-2]  # Get the client_id from the path
-                    
+
                     # For each client, create the path to camera angle videos
                     camera_prefix = f"{client_prefix}raw-videos/{camera_angle}/"
-                    
+
                     # Check if this camera angle exists for the client
                     cam_response = s3_client.list_objects_v2(
                         Bucket=S3_BUCKET,
                         Prefix=camera_prefix,
                         Delimiter='/'
                     )
-                    
+
                     # If the camera angle exists and has videos
                     if 'Contents' in cam_response or 'CommonPrefixes' in cam_response:
                         # List all videos in this directory
@@ -610,7 +613,7 @@ def retrieve_videos():
                             Bucket=S3_BUCKET,
                             Prefix=camera_prefix
                         )
-                        
+
                         videos = []
                         # Filter videos based on video type (entry/exit)
                         for obj in video_response.get('Contents', []):
@@ -619,7 +622,7 @@ def retrieve_videos():
                             # Check if the filename contains the requested video type
                             if video_type.lower() in filename.lower():
                                 videos.append(filename)
-                        
+
                         if videos:  # Only add folders that have matching videos
                             folder_name = f"{date_obj.strftime('%Y%m%d')}_{client_id}_{camera_angle}"
                             folders.append({
@@ -628,14 +631,14 @@ def retrieve_videos():
                                 "s3_prefix": camera_prefix,
                                 "videos": videos
                             })
-            
+
             logger.info(f"Found {len(folders)} folders matching the criteria")
             return jsonify({"success": True, "folders": folders})
-            
+
         except Exception as e:
             logger.error(f"Error retrieving videos: {str(e)}")
             return jsonify({"success": False, "error": str(e)})
-    
+
     # GET method - just render the retrieval form
     return render_template('upload.html', username=session.get('username'))
 
@@ -648,33 +651,33 @@ def process_videos():
     folder_name = request.form.get('folder_name')
     s3_prefix = request.form.get('s3_prefix')
     selected_videos = request.form.getlist('selected_videos[]')
-    
+
     if not folder_id or not s3_prefix or not selected_videos:
         return jsonify({"success": False, "error": "Missing required parameters"})
-    
+
     try:
         logger.info(f"Processing videos from {s3_prefix}: {selected_videos}")
-        
+
         processed_videos = []
-        
+
         # Create a temporary directory to store downloaded videos
         import tempfile
         temp_dir = tempfile.mkdtemp()
-        
+
         for video_name in selected_videos:
             # Construct the full S3 key
             s3_key = f"{s3_prefix}{video_name}"
-            
+
             # Local path for downloaded file
             local_path = os.path.join(temp_dir, video_name)
-            
+
             # Download the file from S3
             success, message, _ = download_file_from_s3(
                 S3_BUCKET,
                 s3_key,
                 local_path
             )
-            
+
             if success:
                 # Apply actual processing to the downloaded video
                 # This would be replaced with your actual video processing algorithm
@@ -687,10 +690,10 @@ def process_videos():
                         "processing_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "size": os.path.getsize(local_path)
                     }
-                    
+
                     # Add to processed videos list
                     processed_videos.append(video_status)
-                    
+
                     logger.info(f"Successfully processed {video_name} from S3")
                 except Exception as video_error:
                     logger.error(f"Error processing {video_name}: {str(video_error)}")
@@ -706,26 +709,26 @@ def process_videos():
                     "status": "download_failed",
                     "error": message
                 })
-        
+
         # We would typically start an asynchronous job here to process videos
         # and provide a job ID for frontend tracking
-        
+
         # For demonstration, we'll just clean up after ourselves
         import shutil
         shutil.rmtree(temp_dir)
-        
+
         if processed_videos:
             return jsonify({
-                "success": True, 
+                "success": True,
                 "message": f"Successfully processed {len(processed_videos)} videos",
                 "processed_videos": processed_videos
             })
         else:
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": "No videos were successfully downloaded"
             })
-        
+
     except Exception as e:
         logger.error(f"Error processing videos: {str(e)}")
         return jsonify({"success": False, "error": str(e)})
@@ -751,24 +754,32 @@ def frame_extraction():
 
             logger.info(f"Video saved to {video_path}")
 
-            # Create a unique output directory for this extraction task
+            # Define path for the annotated video.
+            # The directory will be created by the extractor function.
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            output_frames_dir = os.path.join(app.config['FRAME_EXTRACTION_OUTPUT'], timestamp)
-            output_video_path = os.path.join(output_frames_dir, 'annotated_video.mp4')
+            output_dir = os.path.join(app.config['FRAME_EXTRACTION_OUTPUT'], timestamp)
+            output_video_path = os.path.join(output_dir, 'annotated_video.mp4')
 
             flash(f'Starting frame extraction for {filename}. This may take a while...', 'info')
 
             # Run the extraction process
-            saved_count, frame_paths = extract_and_annotate_wagons(
+            saved_count, frame_images = extract_and_annotate_wagons(
                 video_path=video_path,
-                output_dir_frames=output_frames_dir,
                 output_video_path=output_video_path,
                 model_path=app.config['YOLO_MODEL_PATH']
             )
 
             if saved_count > 0:
                 flash(f'Successfully extracted {saved_count} frames.', 'success')
-                return render_template('frame_extraction.html', frames=frame_paths)
+
+                # Encode frames to base64 to display in the template without saving
+                encoded_frames = []
+                for frame in frame_images:
+                    _, buffer = cv2.imencode('.jpg', frame)
+                    encoded_frame = base64.b64encode(buffer).decode('utf-8')
+                    encoded_frames.append(f"data:image/jpeg;base64,{encoded_frame}")
+
+                return render_template('frame_extraction.html', frames=encoded_frames)
             else:
                 flash('No wagons were detected or an error occurred during processing.', 'warning')
                 return redirect(url_for('frame_extraction'))
@@ -781,4 +792,4 @@ def frame_extraction():
 
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)
