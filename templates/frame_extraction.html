@@ -6,13 +6,24 @@ Detection System{% endblock %} {% block page_styles %}
 />
 <style>
   #videoPreviewCard,
-  #processingCard {
+  #processingCard,
+  #resultsCard {
     display: none;
   }
 
   .progress {
     height: 25px;
     font-size: 1rem;
+  }
+  .frame-img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease-in-out;
+  }
+  .frame-img:hover {
+    transform: scale(1.05);
   }
 </style>
 {% endblock %} {% block content %}
@@ -35,19 +46,14 @@ Detection System{% endblock %} {% block page_styles %}
 
 <div class="row justify-content-center">
   <div class="col-lg-8">
-    <div class="card shadow-sm mb-4" id="uploadCard">
-      <div class="card-header bg-light">
-        <h5 class="mb-0">
-          <i class="fas fa-video me-2"></i>Upload Video for Extraction
-        </h5>
-      </div>
-      <div class="card-body">
-        <form
-          id="extractionForm"
-          method="POST"
-          action="{{ url_for('frame_extraction') }}"
-          enctype="multipart/form-data"
-        >
+    <form id="extractionForm" method="POST" enctype="multipart/form-data">
+      <div class="card shadow-sm mb-4" id="uploadCard">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">
+            <i class="fas fa-video me-2"></i>1. Select Video for Extraction
+          </h5>
+        </div>
+        <div class="card-body">
           <div class="mb-3">
             <label for="videoFile" class="form-label"
               >Select a video file:</label
@@ -64,7 +70,28 @@ Detection System{% endblock %} {% block page_styles %}
               Upload a video to extract frames with wagons.
             </div>
           </div>
-          <div class="text-center">
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-4" id="videoPreviewCard">
+        <div
+          class="card-header bg-light d-flex justify-content-between align-items-center"
+        >
+          <h5 class="mb-0">
+            <i class="fas fa-play-circle me-2"></i>2. Preview and Confirm
+          </h5>
+          <button
+            type="button"
+            id="changeVideoBtn"
+            class="btn btn-sm btn-outline-secondary"
+          >
+            <i class="fas fa-exchange-alt me-1"></i> Change Video
+          </button>
+        </div>
+        <div class="card-body text-center">
+          <video id="videoPlayer" class="img-fluid rounded" controls></video>
+          <p id="videoFileName" class="mt-2 text-muted"></p>
+          <div class="text-center mt-3">
             <button
               type="submit"
               id="submitBtn"
@@ -74,21 +101,9 @@ Detection System{% endblock %} {% block page_styles %}
               <i class="fas fa-cogs me-2"></i>Start Extraction
             </button>
           </div>
-        </form>
+        </div>
       </div>
-    </div>
-
-    <div class="card shadow-sm mb-4" id="videoPreviewCard">
-      <div class="card-header bg-light">
-        <h5 class="mb-0">
-          <i class="fas fa-play-circle me-2"></i>Video Preview
-        </h5>
-      </div>
-      <div class="card-body text-center">
-        <video id="videoPlayer" class="img-fluid rounded" controls></video>
-        <p id="videoFileName" class="mt-2 text-muted"></p>
-      </div>
-    </div>
+    </form>
 
     <div class="card shadow-sm mb-4" id="processingCard">
       <div class="card-header bg-light">
@@ -105,9 +120,7 @@ Detection System{% endblock %} {% block page_styles %}
           <span class="visually-hidden">Loading...</span>
         </div>
         <h4 class="mt-3">Extracting frames, please wait...</h4>
-        <p class="text-muted">
-          This may take several minutes depending on the video length.
-        </p>
+        <p class="text-muted" id="progressStatus">Initializing...</p>
         <div class="progress mt-4">
           <div
             id="progressBar"
@@ -124,40 +137,194 @@ Detection System{% endblock %} {% block page_styles %}
       </div>
     </div>
 
-    {% if frames %}
     <div class="card shadow-sm" id="resultsCard">
-      <div class="card-header">
+      <div
+        class="card-header d-flex justify-content-between align-items-center"
+      >
         <h5 class="mb-0">
           <i class="fas fa-images me-2"></i>Extraction Results
         </h5>
+        <a
+          href="{{ url_for('frame_extraction') }}"
+          class="btn btn-sm btn-primary"
+        >
+          <i class="fas fa-redo me-2"></i>Start New Extraction
+        </a>
       </div>
       <div class="card-body">
-        <div class="alert alert-success">
-          Successfully extracted {{ frames|length }} frames.
-        </div>
-        <div class="row">
-          {% for frame_data_url in frames %}
-          <div class="col-lg-3 col-md-4 col-6 mb-4">
-            <a href="{{ frame_data_url }}" target="_blank">
-              <img
-                src="{{ frame_data_url }}"
-                class="img-fluid rounded shadow-sm"
-                alt="Extracted Frame"
-              />
-            </a>
-          </div>
-          {% endfor %}
-        </div>
-        <div class="text-center mt-3">
-          <a href="{{ url_for('frame_extraction') }}" class="btn btn-primary">
-            <i class="fas fa-redo me-2"></i>Start New Extraction
-          </a>
+        <div class="alert alert-success" id="resultsMessage"></div>
+        <div class="row" id="resultsContainer">
+          <!-- Extracted frames will be injected here by JavaScript -->
         </div>
       </div>
     </div>
-    {% endif %}
   </div>
 </div>
 {% endblock %} {% block page_scripts %}
-<script src="{{ url_for('static', filename='js/frame_extraction.js') }}"></script>
+<!-- FIX: JavaScript is now embedded directly in the template -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const extractionForm = document.getElementById("extractionForm");
+    const videoFile = document.getElementById("videoFile");
+    const submitBtn = document.getElementById("submitBtn");
+    const uploadCard = document.getElementById("uploadCard");
+    const processingCard = document.getElementById("processingCard");
+    const resultsCard = document.getElementById("resultsCard");
+    const progressBar = document.getElementById("progressBar");
+    const progressStatus = document.getElementById("progressStatus");
+    const videoPreviewCard = document.getElementById("videoPreviewCard");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const videoFileName = document.getElementById("videoFileName");
+    const changeVideoBtn = document.getElementById("changeVideoBtn");
+    const resultsContainer = document.getElementById("resultsContainer");
+    const resultsMessage = document.getElementById("resultsMessage");
+
+    videoFile.addEventListener("change", () => {
+      if (videoFile.files.length > 0) {
+        submitBtn.disabled = false;
+        const file = videoFile.files[0];
+        const videoURL = URL.createObjectURL(file);
+        videoPlayer.src = videoURL;
+        videoFileName.textContent = file.name;
+        uploadCard.style.display = "none";
+        videoPreviewCard.style.display = "block";
+      } else {
+        submitBtn.disabled = true;
+      }
+    });
+
+    changeVideoBtn.addEventListener("click", () => {
+      videoFile.value = "";
+      videoPreviewCard.style.display = "none";
+      uploadCard.style.display = "block";
+      submitBtn.disabled = true;
+    });
+
+    extractionForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append("video", videoFile.files[0]);
+
+      uploadCard.style.display = "none";
+      videoPreviewCard.style.display = "none";
+      processingCard.style.display = "block";
+
+      updateProgressBar(0, "Submitting...");
+
+      const postUrl = "{{ url_for('frame_extraction') }}";
+
+      fetch(postUrl, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin", // **FIX: Ensure cookies are sent with the request**
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (data.success) {
+            pollTaskStatus(data.task_id);
+          } else {
+            alert("Error starting process: " + data.error);
+            resetToUploadState();
+          }
+        })
+        .catch((error) => {
+          console.error("Error:", error);
+          alert(
+            "An unexpected error occurred. Your session may have expired. Please try logging in again."
+          );
+          resetToUploadState();
+        });
+    });
+
+    function pollTaskStatus(taskId) {
+      const interval = setInterval(() => {
+        fetch(`/task-status/${taskId}`, {
+          credentials: "same-origin", // **FIX: Ensure cookies are sent with polling requests**
+        })
+          .then((response) => {
+            if (response.redirected) {
+              window.location.href = response.url;
+              return;
+            }
+            if (!response.ok) {
+              throw new Error(
+                `Server responded with status: ${response.status}`
+              );
+            }
+            return response.json();
+          })
+          .then((data) => {
+            if (!data) return;
+
+            if (data.state === "SUCCESS") {
+              clearInterval(interval);
+              processingCard.style.display = "none";
+              displayResults(data.result);
+            } else if (data.state === "FAILURE") {
+              clearInterval(interval);
+              alert("Processing failed: " + data.status);
+              resetToUploadState();
+            } else {
+              updateProgressBar(data.progress, data.status);
+            }
+          })
+          .catch((error) => {
+            clearInterval(interval);
+            console.error("Polling error:", error);
+            alert("Error checking task status. Your session may have expired.");
+            resetToUploadState();
+          });
+      }, 2000);
+    }
+
+    function updateProgressBar(progress, status) {
+      progressBar.style.width = progress + "%";
+      progressBar.textContent = progress + "%";
+      progressBar.setAttribute("aria-valuenow", progress);
+      progressStatus.textContent = status;
+    }
+
+    function displayResults(resultData) {
+      const frames = resultData.result;
+      const count = resultData.count;
+      resultsMessage.textContent = `Successfully extracted ${count} frames.`;
+      resultsContainer.innerHTML = "";
+
+      if (frames && frames.length > 0) {
+        frames.forEach((frameDataUrl) => {
+          const col = document.createElement("div");
+          col.className = "col-lg-3 col-md-4 col-6 mb-4";
+          const link = document.createElement("a");
+          link.href = frameDataUrl;
+          link.target = "_blank";
+          const img = document.createElement("img");
+          img.src = frameDataUrl;
+          img.className = "img-fluid rounded shadow-sm frame-img";
+          img.alt = "Extracted Frame";
+          link.appendChild(img);
+          col.appendChild(link);
+          resultsContainer.appendChild(col);
+        });
+      } else {
+        resultsContainer.innerHTML =
+          '<p class="text-center text-muted">No wagons were detected in the video.</p>';
+      }
+      resultsCard.style.display = "block";
+    }
+
+    function resetToUploadState() {
+      processingCard.style.display = "none";
+      resultsCard.style.display = "none";
+      videoPreviewCard.style.display = "none";
+      uploadCard.style.display = "block";
+      videoFile.value = "";
+      submitBtn.disabled = true;
+    }
+  });
+</script>
 {% endblock %}

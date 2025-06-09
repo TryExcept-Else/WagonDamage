@@ -5,8 +5,7 @@ import collections
 import logging
 import torch
 import torch.nn as nn
-# Import all likely required classes from ultralytics and torch
-from ultralytics.nn.tasks import DetectionModel, SegmentationModel # <<< CHANGE THIS LINE
+from ultralytics.nn.tasks import DetectionModel, SegmentationModel
 from ultralytics.nn.modules import Conv, C2f, Concat
 from ultralytics.nn.modules.block import Bottleneck
 
@@ -14,17 +13,14 @@ from ultralytics.nn.modules.block import Bottleneck
 logger = logging.getLogger(__name__)
 
 # --- FIX for PyTorch Model Loading ---
-# Add a comprehensive list of required model classes to PyTorch's trusted list.
 try:
     torch.serialization.add_safe_globals([
-        # --- ultralytics classes ---
-        DetectionModel,  # <<< FIX: Changed from SegmentationModel
-        SegmentationModel,  # Keep this if you still need segmentation models
+        DetectionModel,
+        SegmentationModel,
         Conv,
         C2f,
         Concat,
         Bottleneck,
-        # --- torch.nn classes ---
         nn.Sequential,
         nn.Conv2d,
         nn.BatchNorm2d,
@@ -33,43 +29,38 @@ try:
         nn.ModuleList
     ])
 except AttributeError:
-    # Handle older PyTorch versions that may not have this function
-    logger.warning("Could not set safe globals for torch.serialization. This might not be needed for your PyTorch version.")
+    logger.warning("Could not set safe globals for torch.serialization.")
 
 
-def extract_and_annotate_wagons(video_path, output_video_path, model_path):
+def extract_and_annotate_wagons(video_path, output_video_path, model, task=None):
     """
-    Processes a video to detect wagons, returns annotated frames of single wagons,
-    and creates an annotated video.
+    Processes a video to detect wagons using a pre-loaded YOLO model,
+    returns annotated frames, and creates an annotated video, while updating
+    Celery task progress.
 
     Args:
         video_path (str): Path to the input video file.
         output_video_path (str): Path to save the annotated output video.
-        model_path (str): Path to the YOLOv8 model file.
+        model (YOLO): The pre-loaded YOLO model instance.
+        task (celery.Task, optional): Celery task instance for progress updates.
     """
     # --- Configuration ---
     CONFIDENCE_THRESHOLD = 0.6
-    WAGON_CLASS_ID = 1  # Verify this from your model's YAML file
+    WAGON_CLASS_ID = 1
     CAPTURE_DELAY = 5
     FRAME_BUFFER_SIZE = CAPTURE_DELAY + 1
 
-    # --- Initialization ---
-    try:
-        # Create directory for the output video if it doesn't exist
-        output_video_dir = os.path.dirname(output_video_path)
-        os.makedirs(output_video_dir, exist_ok=True)
-        logger.info(f"Annotated video will be saved to: {output_video_path}")
-    except Exception as e:
-        logger.error(f"Error creating output video directory: {e}")
+    if model is None:
+        logger.error("YOLO model is not loaded. Aborting extraction.")
+        if task:
+            task.update_state(state='FAILURE', meta={'status': 'Model not loaded.'})
         return 0, []
 
-    # Load YOLOv8 model
     try:
-        model = YOLO(model_path)
-        model.to('cpu')  # Ensure model runs on CPU if no GPU is available
-        logger.info(f"YOLO model loaded from {model_path}")
+        output_video_dir = os.path.dirname(output_video_path)
+        os.makedirs(output_video_dir, exist_ok=True)
     except Exception as e:
-        logger.error(f"Error loading YOLO model: {e}")
+        logger.error(f"Error creating output video directory: {e}")
         return 0, []
 
     cap = cv2.VideoCapture(video_path)
@@ -80,6 +71,7 @@ def extract_and_annotate_wagons(video_path, output_video_path, model_path):
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
@@ -98,10 +90,14 @@ def extract_and_annotate_wagons(video_path, output_video_path, model_path):
             break
 
         frame_idx += 1
+        
+        if task and total_frames > 0 and frame_idx % 20 == 0:
+            progress = 10 + int((frame_idx / total_frames) * 80)
+            task.update_state(state='PROGRESS', meta={'status': f'Processing frame {frame_idx}/{total_frames}', 'progress': progress})
+
         original_frame_for_buffer = frame.copy()
         annotated_frame_for_video = frame.copy()
 
-        # Perform detection (verbose=False speeds up inference)
         results = model(original_frame_for_buffer, verbose=False, conf=CONFIDENCE_THRESHOLD)
 
         current_detected_wagon_boxes_coords = []
@@ -110,7 +106,6 @@ def extract_and_annotate_wagons(video_path, output_video_path, model_path):
                 conf = box_obj.conf.item()
                 cls_id = int(box_obj.cls.item())
 
-                # Bounding box is still available even in segmentation models
                 if cls_id == WAGON_CLASS_ID and conf >= CONFIDENCE_THRESHOLD:
                     current_detected_wagon_boxes_coords.append(box_obj.xyxy.cpu().numpy().flatten().tolist())
 
@@ -137,7 +132,6 @@ def extract_and_annotate_wagons(video_path, output_video_path, model_path):
                     potential_capture_frame_img = None
                     current_capture_state = "SEARCHING_FOR_WAGON"
 
-    # Save the last pending frame if the video ends while a wagon is passing
     if current_capture_state == "SINGLE_WAGON_PASSING" and potential_capture_frame_img is not None:
         saved_frames.append(potential_capture_frame_img)
         saved_frame_count += 1

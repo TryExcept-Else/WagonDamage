@@ -56,8 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Reset progress bar
         updateProgressBar(0, 'Submitting...');
 
-        // *** FIX: Use a hardcoded URL path to ensure the correct endpoint is called. ***
-        fetch('/frame_extraction', {
+        fetch("{{ url_for('frame_extraction') }}", {
             method: 'POST',
             body: formData,
         })
